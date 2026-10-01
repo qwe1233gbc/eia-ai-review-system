@@ -1,0 +1,36 @@
+# 版本控制与凭证
+.git
+.gitignore
+.github
+.env
+.env.example
+
+# 实验数据与知识库（真实企业环评报告 + 法规全文，量大且不宜公开）
+00_实验流程与手册
+01_题单与金标
+02_报告文本
+03_知识库
+04_实验条件冻结
+05_提示词与脚本存档
+06_对齐与匹配底稿
+07_文献与交接
+文件清单.csv
+整理简报.md
+
+# 本地构建产物 / 依赖
+app/frontend/node_modules
+app/frontend/dist
+node_modules
+
+# Python 缓存
+__pycache__
+**/__pycache__
+*.pyc
+
+# 部署用 Python 脚本（只保留 kb_slim 精简索引）
+app/deploy/*.py
+
+# 其它
+*.bat
+README.md
+应用README.md
