@@ -17,6 +17,23 @@ const error = ref('')
 
 const result = ref(null)
 const activeSample = ref('')
+const expandedSample = ref('')
+
+function toggleSample(s) {
+  expandedSample.value = expandedSample.value === s.id ? '' : s.id
+}
+
+function downloadSample(s) {
+  const blob = new Blob([s.text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `示例环评报告_${s.title}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 // 审核进度：当前环节 + 进度百分比 + 预计剩余秒数
 const STEPS = [
@@ -226,6 +243,9 @@ onUnmounted(() => stopProgress())
         <h2 style="margin: 0">② 或点选一份内置示例报告</h2>
         <span class="meta-line">无需上传，一键演示</span>
       </div>
+      <p class="sample-tip">
+        不确定该上传什么内容？可先「查看原文」了解环评报告的评价标准章节格式，或「下载 .txt」后走一遍上传审核流程。
+      </p>
       <div class="samples">
         <div
           v-for="s in SAMPLES"
@@ -238,9 +258,16 @@ onUnmounted(() => stopProgress())
             <span class="sample-tag">{{ s.tag }}</span>
           </div>
           <div class="sample-desc">{{ s.desc }}</div>
-          <button class="btn-ghost sample-btn" :disabled="loading" @click="runSample(s)">
-            {{ loading && activeSample === s.id ? '审核中…' : '审核这份报告' }}
-          </button>
+          <div class="sample-actions">
+            <button class="btn-ghost sample-btn" :disabled="loading" @click="runSample(s)">
+              {{ loading && activeSample === s.id ? '审核中…' : '审核这份报告' }}
+            </button>
+            <button class="btn-link" @click="toggleSample(s)">
+              {{ expandedSample === s.id ? '收起原文' : '查看原文' }}
+            </button>
+            <button class="btn-link" @click="downloadSample(s)">下载 .txt</button>
+          </div>
+          <pre v-if="expandedSample === s.id" class="sample-text">{{ s.text }}</pre>
         </div>
       </div>
     </div>
