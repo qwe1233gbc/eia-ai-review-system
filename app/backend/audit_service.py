@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import List
+from typing import Any, Iterator, List, Tuple
 
 from .config import settings
 from .llm_client import chat_completion
@@ -174,22 +174,41 @@ def _to_result(topic: str, arguments: dict, hits: List[dict], model: str, elapse
     )
 
 
-def audit(text: str, topic: str = "emission_standards", top_k: int = 5) -> AuditResult:
+def _stage(key: str, label: str, progress: int, eta: int) -> dict:
+    return {"stage": key, "label": label, "progress": progress, "eta": eta}
+
+
+def audit_stream(
+    text: str, topic: str = "emission_standards", top_k: int = 5
+) -> Iterator[Tuple[str, Any]]:
+    """流式审核：依次产出 ("stage", 阶段事件) 与 ("result", AuditResult)。
+
+    阶段事件用于前端展示「当前环节 + 进度 + 预计剩余秒数」。
+    """
     # Mock 模式：直接返回示例，验证链路
     if settings.effective_mode:
+        yield "stage", _stage("parse", "解析报告文本", 20, 2)
+        yield "stage", _stage("retrieve", "检索法规知识库", 60, 1)
+        yield "stage", _stage("format", "生成结构化结果", 95, 0)
         res = AuditResult(**MOCK_RESULT)
         res.topic = topic
-        return res
+        yield "result", res
+        return
 
     start = time.time()
-    hits = get_retriever().search(_build_query(text), k=top_k)
+    yield "stage", _stage("parse", "解析报告文本", 8, 18)
+    query = _build_query(text)
+    context = _build_context(text)
 
+    yield "stage", _stage("retrieve", "检索法规知识库", 35, 15)
+    hits = get_retriever().search(query, k=top_k)
+
+    yield "stage", _stage("llm", "调用大模型审核", 70, 12)
     user_prompt = (
-        f"## 报告文本（排放标准相关章节）\n{_build_context(text)}\n\n"
+        f"## 报告文本（排放标准相关章节）\n{context}\n\n"
         f"## 知识库检索证据\n{_format_sources(hits)}\n\n"
         f"请审核该报告排放标准的准确性，并调用 submit_eia_review 输出结构化结果。"
     )
-
     try:
         reply = chat_completion(
             system=_SYSTEM_PROMPT,
@@ -198,7 +217,7 @@ def audit(text: str, topic: str = "emission_standards", top_k: int = 5) -> Audit
             tool_choice=_TOOL_CHOICE,
         )
     except Exception as e:
-        return AuditResult(
+        yield "result", AuditResult(
             topic=topic,
             mode="live",
             model=settings.LLM_MODEL,
@@ -206,11 +225,17 @@ def audit(text: str, topic: str = "emission_standards", top_k: int = 5) -> Audit
             risk_level="中",
             issues=[],
             retrieved_sources=[
-                RetrievedSource(rank=h["rank"], score=h["score"], source_id=h.get("source_id", ""), title=h.get("title", ""), snippet=h.get("snippet", ""))
+                RetrievedSource(
+                    rank=h["rank"], score=h["score"], source_id=h.get("source_id", ""),
+                    title=h.get("title", ""), snippet=h.get("snippet", ""),
+                )
                 for h in hits
             ],
             elapsed_seconds=round(time.time() - start, 2),
         )
+        return
+
+    yield "stage", _stage("format", "生成结构化结果", 95, 1)
 
     if reply.get("_type") == "function":
         arguments = reply.get("arguments") or {}
@@ -228,4 +253,13 @@ def audit(text: str, topic: str = "emission_standards", top_k: int = 5) -> Audit
                 except json.JSONDecodeError:
                     arguments = {"summary": content[:500], "risk_level": "中", "issues": []}
 
-    return _to_result(topic, arguments, hits, settings.LLM_MODEL, time.time() - start)
+    yield "result", _to_result(topic, arguments, hits, settings.LLM_MODEL, time.time() - start)
+
+
+def audit(text: str, topic: str = "emission_standards", top_k: int = 5) -> AuditResult:
+    """同步审核（内部消费 audit_stream），供非流式接口使用。"""
+    result: Any = None
+    for kind, payload in audit_stream(text, topic, top_k):
+        if kind == "result":
+            result = payload
+    return result

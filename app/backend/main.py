@@ -1,14 +1,16 @@
 """FastAPI 入口：审核接口 + 前端静态托管。"""
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any, Iterator, Tuple
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .audit_service import TOPIC_LABELS, audit
+from .audit_service import TOPIC_LABELS, audit, audit_stream
 from .config import PROJECT_ROOT, settings
 from .retrieval import get_retriever
 from .parsers import SUPPORTED_EXT, extract_text
@@ -74,6 +76,55 @@ async def audit_upload(
     if not text.strip():
         return JSONResponse(status_code=400, content={"detail": "未能从文件中提取到文本"})
     return audit(text, topic, top_k)
+
+
+def _sse_response(events: Iterator[Tuple[str, Any]]) -> StreamingResponse:
+    """把 audit_stream 的阶段/结果事件编码为 SSE 流。"""
+
+    def event_stream():
+        try:
+            for kind, payload in events:
+                if kind == "stage":
+                    data = payload
+                else:
+                    obj = payload.model_dump() if hasattr(payload, "model_dump") else payload
+                    data = {"stage": "done", "label": "审核完成", "progress": 100, "eta": 0, "result": obj}
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        except Exception as e:  # 兜底：把异常作为事件回传，前端可回退演示
+            yield f"data: {json.dumps({'stage': 'error', 'message': str(e)[:300]}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/audit/stream")
+def audit_text_stream(req: AuditRequest):
+    text = (req.text or "").strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"detail": "文本为空"})
+    return _sse_response(audit_stream(text, req.topic, req.top_k))
+
+
+@app.post("/api/audit/upload/stream")
+async def audit_upload_stream(
+    file: UploadFile = File(...),
+    topic: str = Form("emission_standards"),
+    top_k: int = Form(5),
+):
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_EXT:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"不支持的文件类型 {suffix}，仅支持: {', '.join(sorted(SUPPORTED_EXT))}"},
+        )
+    data = await file.read()
+    text = extract_text(file.filename, data)
+    if not text.strip():
+        return JSONResponse(status_code=400, content={"detail": "未能从文件中提取到文本"})
+    return _sse_response(audit_stream(text, topic, top_k))
 
 
 # 前端静态托管（若已构建）

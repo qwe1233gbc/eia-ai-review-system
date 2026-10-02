@@ -201,12 +201,82 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 13px;
 }
 
-.loading {
-  text-align: center;
-  color: var(--muted);
-  padding: 24px;
-  font-size: 14px;
+/* 审核进度条 */
+.progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
+
+.progress-label { font-weight: 600; font-size: 14px; }
+
+.progress-eta { font-size: 12px; color: var(--muted); }
+
+.progress-track {
+  height: 8px;
+  background: #eef2f7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, var(--primary));
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.progress-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  transition: all 0.2s;
+}
+
+.step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.step.active {
+  color: var(--primary);
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.step.active .step-dot { background: var(--primary); }
+
+.step.done {
+  color: var(--low);
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.step.done .step-dot { background: var(--low); }
 
 .filename { font-weight: 600; margin-bottom: 4px; }
 

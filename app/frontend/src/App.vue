@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { fetchHealth, fetchTopics, fetchKnowledge, auditUpload, auditSample } from './api.js'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { fetchHealth, fetchTopics, fetchKnowledge, auditUploadStream, auditSampleStream } from './api.js'
 import { SAMPLES, KNOWLEDGE } from './samples.js'
 
 const topics = ref([{ key: 'emission_standards', label: '排放标准准确性' }])
@@ -17,6 +17,57 @@ const error = ref('')
 
 const result = ref(null)
 const activeSample = ref('')
+
+// 审核进度：当前环节 + 进度百分比 + 预计剩余秒数
+const STEPS = [
+  { key: 'parse', label: '解析报告' },
+  { key: 'retrieve', label: '检索知识库' },
+  { key: 'llm', label: '大模型审核' },
+  { key: 'format', label: '生成结果' }
+]
+const progress = ref(0)
+const stageLabel = ref('')
+const currentStage = ref('')
+const eta = ref(null)
+const elapsed = ref(0)
+let ticker = null
+
+const stepIndex = computed(() => STEPS.findIndex((s) => s.key === currentStage.value))
+function stepState(i) {
+  const cur = stepIndex.value
+  if (cur < 0) return ''
+  if (i < cur) return 'done'
+  return i === cur ? 'active' : ''
+}
+
+function handleStage(p) {
+  if (typeof p.progress === 'number') progress.value = p.progress
+  if (p.label) stageLabel.value = p.label
+  if (p.stage) currentStage.value = p.stage
+  if (typeof p.eta === 'number') eta.value = p.eta
+}
+
+function startProgress() {
+  stopProgress()
+  progress.value = 0
+  stageLabel.value = '正在准备…'
+  currentStage.value = 'parse'
+  eta.value = null
+  elapsed.value = 0
+  ticker = setInterval(() => {
+    elapsed.value += 1
+    if (eta.value !== null && eta.value > 0) eta.value -= 1
+    // 长耗时的「大模型审核」阶段缓慢推进，避免进度条长时间静止
+    if (currentStage.value === 'llm' && progress.value < 92) progress.value += 1
+  }, 1000)
+}
+
+function stopProgress() {
+  if (ticker) {
+    clearInterval(ticker)
+    ticker = null
+  }
+}
 
 const statusText = computed(() => {
   if (mode.value === 'mock') return 'Mock 模式（离线示例，未调用模型）'
@@ -56,11 +107,13 @@ async function run() {
   loading.value = true
   error.value = ''
   result.value = null
+  startProgress()
   try {
-    result.value = await auditUpload(f, topic.value)
+    result.value = await auditUploadStream(f, topic.value, handleStage)
   } catch (e) {
     error.value = e.message || '审核失败'
   } finally {
+    stopProgress()
     loading.value = false
   }
 }
@@ -71,11 +124,13 @@ async function runSample(sample) {
   result.value = null
   fileName.value = sample.title
   activeSample.value = sample.id
+  startProgress()
   try {
-    result.value = await auditSample(sample.text)
+    result.value = await auditSampleStream(sample.text, handleStage)
   } catch (e) {
     error.value = e.message || '审核失败'
   } finally {
+    stopProgress()
     loading.value = false
   }
 }
@@ -103,6 +158,8 @@ onMounted(async () => {
     mode.value = ''
   }
 })
+
+onUnmounted(() => stopProgress())
 </script>
 
 <template>
@@ -189,7 +246,20 @@ onMounted(async () => {
     </div>
 
     <div v-if="loading" class="card">
-      <div class="loading">正在解析报告、检索知识库并生成审核结果…</div>
+      <div class="progress-head">
+        <span class="progress-label">{{ stageLabel }}</span>
+        <span class="progress-eta">
+          {{ eta !== null && eta > 0 ? `预计还需约 ${eta} 秒` : '即将完成…' }} · 已用 {{ elapsed }}s
+        </span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+      </div>
+      <div class="progress-steps">
+        <span v-for="(s, i) in STEPS" :key="s.key" class="step" :class="stepState(i)">
+          <span class="step-dot">{{ stepState(i) === 'done' ? '✓' : i + 1 }}</span>{{ s.label }}
+        </span>
+      </div>
     </div>
 
     <div v-if="error" class="card">
