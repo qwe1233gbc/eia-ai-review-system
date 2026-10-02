@@ -27,6 +27,33 @@ DENSE_WEIGHT = 0.6
 SPARSE_WEIGHT = 0.4
 
 
+def _clean_snippet(text: str) -> str:
+    """清洗知识库片段：去除 HTML 标签/实体、LaTeX 命令、Markdown 标记等噪声，输出可读纯文本。"""
+    t = text or ""
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    t = t.replace("[表格已提取]", " ").replace("▓", " ")
+    t = re.sub(r"\$+", " ", t)
+    t = re.sub(r"\\[a-zA-Z]+", " ", t)
+    t = re.sub(r"\^\s*\{?\s*3\s*\}?", "³", t)
+    t = re.sub(r"\^\s*\{?\s*2\s*\}?", "²", t)
+    t = re.sub(r"[{}_\\]", "", t)
+    t = re.sub(r"#+\s*", " ", t)
+    for pat, rep in (
+        (r"T\s+V\s+O\s+C", "TVOC"),
+        (r"V\s+O\s+C\s*s", "VOCs"),
+        (r"V\s+O\s+C", "VOC"),
+        (r"N\s+M\s+H\s+C", "NMHC"),
+    ):
+        t = re.sub(pat, rep, t)
+    t = re.sub(r"m\s+³", "m³", t)
+    t = re.sub(r"m\s+²", "m²", t)
+    t = re.sub(r"\bm\s+g\b", "mg", t)
+    t = re.sub(r"\s*/\s*", "/", t)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
+
+
 def _tokens(text: str) -> List[str]:
     s = text.lower()
     out = re.findall(r"[a-z]+(?:[._/-][a-z0-9]+)*|\d+(?:[._/-]\d+)*", s)
@@ -133,7 +160,7 @@ class Retriever:
                 or d.get("article_no")
                 or ""
             )
-            txt = (d.get("text") or d.get("content") or "").replace("\n", " ")
+            txt = _clean_snippet(d.get("text") or d.get("content") or "")
             hits.append(
                 {
                     "rank": rank,
