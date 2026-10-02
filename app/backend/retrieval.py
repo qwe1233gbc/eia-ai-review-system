@@ -145,6 +145,30 @@ class Retriever:
             )
         return hits
 
+    def stats(self) -> dict:
+        """汇总知识库来源分布，供前端展示知识库覆盖范围。"""
+        self._load()
+        groups: dict = {}
+        for d in self._metadata:
+            sid = d.get("source_id", "")
+            if sid not in groups:
+                groups[sid] = {
+                    "source_id": sid,
+                    "file": d.get("source_file", "") or sid,
+                    "doc_no": (d.get("doc_no") or "").strip(),
+                    "count": 0,
+                }
+            g = groups[sid]
+            g["count"] += 1
+            if not g["doc_no"] and (d.get("doc_no") or "").strip():
+                g["doc_no"] = d.get("doc_no", "").strip()
+        sources = sorted(groups.values(), key=lambda x: -x["count"])
+        return {
+            "total_documents": len(self._metadata),
+            "total_sources": len(groups),
+            "sources": sources,
+        }
+
 
 _retriever: Optional[Retriever] = None
 

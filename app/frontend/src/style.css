@@ -211,3 +211,83 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .filename { font-weight: 600; margin-bottom: 4px; }
 
 .meta-line { font-size: 12px; color: var(--muted); }
+
+/* 知识库覆盖清单 */
+.kb-group { margin-top: 14px; }
+
+.kb-group h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.kb-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kb-item {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.kb-item strong { font-weight: 600; }
+
+/* 示例报告卡片 */
+.samples {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .samples { grid-template-columns: 1fr; }
+}
+
+.sample-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.sample-card:hover { border-color: var(--primary); }
+
+.sample-card.active {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+
+.sample-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sample-title { font-weight: 700; font-size: 14px; }
+
+.sample-tag {
+  font-size: 11px;
+  color: var(--primary);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.sample-desc { font-size: 12px; color: var(--muted); }
+
+.sample-btn { align-self: flex-start; margin-top: 2px; }

@@ -1,11 +1,13 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { fetchHealth, fetchTopics, auditUpload, auditSample } from './api.js'
+import { fetchHealth, fetchTopics, fetchKnowledge, auditUpload, auditSample } from './api.js'
+import { SAMPLES, KNOWLEDGE } from './samples.js'
 
 const topics = ref([{ key: 'emission_standards', label: '排放标准准确性' }])
 const topic = ref('emission_standards')
 const mode = ref('')
 const model = ref('')
+const kb = ref(null)
 
 const fileName = ref('')
 const dragging = ref(false)
@@ -13,6 +15,7 @@ const loading = ref(false)
 const error = ref('')
 
 const result = ref(null)
+const activeSample = ref('')
 
 const statusText = computed(() => {
   if (mode.value === 'mock') return 'Mock 模式（离线示例，未调用模型）'
@@ -25,6 +28,7 @@ const severityClass = (s) => ({ 高: 'high', 中: 'mid', 低: 'low' }[s] || 'mut
 function onFilePicked(file) {
   if (!file) return
   fileName.value = file.name
+  activeSample.value = ''
   result.value = null
   error.value = ''
 }
@@ -45,7 +49,7 @@ async function run() {
   const input = document.querySelector('#file-input')
   const f = input && input.files && input.files[0]
   if (!f) {
-    error.value = '请先选择或拖入一份报告文件，或点击「加载内置示例」'
+    error.value = '请先选择或拖入一份报告文件，或点击下方「内置示例报告」'
     return
   }
   loading.value = true
@@ -60,13 +64,14 @@ async function run() {
   }
 }
 
-async function runSample() {
+async function runSample(sample) {
   loading.value = true
   error.value = ''
   result.value = null
-  fileName.value = '示例报告.md'
+  fileName.value = sample.title
+  activeSample.value = sample.id
   try {
-    result.value = await auditSample()
+    result.value = await auditSample(sample.text)
   } catch (e) {
     error.value = e.message || '审核失败'
   } finally {
@@ -88,10 +93,11 @@ function basisText(b) {
 
 onMounted(async () => {
   try {
-    const [h, t] = await Promise.all([fetchHealth(), fetchTopics()])
+    const [h, t, k] = await Promise.all([fetchHealth(), fetchTopics(), fetchKnowledge()])
     mode.value = h.mock_mode ? 'mock' : 'live'
     model.value = h.model || ''
     if (t && t.length) topics.value = t
+    kb.value = k
   } catch (e) {
     mode.value = ''
   }
@@ -102,8 +108,23 @@ onMounted(async () => {
   <div class="container">
     <header class="header">
       <h1>环评AI知识库智能审查系统</h1>
-      <p>上传环评报告，检索法规知识库并调用大模型，生成结构化的排放标准审核结果</p>
+      <p>内置法规标准知识库，上传报告或点选示例，一键生成结构化的排放标准审核结果</p>
     </header>
+
+    <div class="card">
+      <div class="row" style="margin-top: 0; justify-content: space-between">
+        <h2 style="margin: 0">内置法规知识库</h2>
+        <span class="meta-line">覆盖 {{ kb ? kb.total_documents : '—' }} 条条款 · {{ kb ? kb.total_sources : '—' }} 个来源</span>
+      </div>
+      <div v-for="g in KNOWLEDGE" :key="g.group" class="kb-group">
+        <h3>{{ g.group }}</h3>
+        <div class="kb-items">
+          <span v-for="it in g.items" :key="it.no + it.name" class="kb-item">
+            <strong>{{ it.no }}</strong><span v-if="it.name"> · {{ it.name }}</span>
+          </span>
+        </div>
+      </div>
+    </div>
 
     <div class="card">
       <div class="row" style="margin-top: 0; justify-content: space-between">
@@ -139,7 +160,30 @@ onMounted(async () => {
         <button :disabled="loading || !fileName" @click="run">
           {{ loading ? '审核中…' : '开始审核' }}
         </button>
-        <button class="btn-ghost" :disabled="loading" @click="runSample">加载内置示例</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-top: 0; justify-content: space-between">
+        <h2 style="margin: 0">② 或点选一份内置示例报告</h2>
+        <span class="meta-line">无需上传，一键演示</span>
+      </div>
+      <div class="samples">
+        <div
+          v-for="s in SAMPLES"
+          :key="s.id"
+          class="sample-card"
+          :class="{ active: activeSample === s.id }"
+        >
+          <div class="sample-head">
+            <span class="sample-title">{{ s.title }}</span>
+            <span class="sample-tag">{{ s.tag }}</span>
+          </div>
+          <div class="sample-desc">{{ s.desc }}</div>
+          <button class="btn-ghost sample-btn" :disabled="loading" @click="runSample(s)">
+            {{ loading && activeSample === s.id ? '审核中…' : '审核这份报告' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -154,7 +198,7 @@ onMounted(async () => {
     <div v-if="result" class="card">
       <div class="row" style="margin-top: 0; justify-content: space-between; align-items: flex-start">
         <div>
-          <h2 style="margin: 0 0 6px">② 审核结果</h2>
+          <h2 style="margin: 0 0 6px">③ 审核结果</h2>
           <div class="issue-title">{{ result.summary }}</div>
         </div>
         <div style="text-align: right">

@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .audit_service import TOPIC_LABELS, audit
 from .config import PROJECT_ROOT, settings
+from .retrieval import get_retriever
 from .parsers import SUPPORTED_EXT, extract_text
 from .schemas import AuditRequest, AuditResult
 
@@ -38,6 +39,14 @@ def health():
 @app.get("/api/topics")
 def topics():
     return [{"key": k, "label": v} for k, v in TOPIC_LABELS.items()]
+
+
+@app.get("/api/knowledge")
+def knowledge():
+    try:
+        return get_retriever().stats()
+    except Exception as e:
+        return {"total_documents": 0, "total_sources": 0, "sources": [], "error": str(e)}
 
 
 @app.post("/api/audit", response_model=AuditResult)

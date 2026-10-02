@@ -1,4 +1,5 @@
 import { DEMO, sleep } from './demo-data.js'
+import { KB_FALLBACK } from './samples.js'
 
 // 探测到的运行模式：'live' = 已连后端；'demo' = 无后端（如 GitHub Pages）回退内置示例
 let mode = null
@@ -31,6 +32,16 @@ export async function fetchTopics() {
     /* ignore */
   }
   return DEMO.topics
+}
+
+export async function fetchKnowledge() {
+  try {
+    const d = await tryJson('/api/knowledge')
+    if (d && d.total_sources) return d
+  } catch (e) {
+    /* ignore */
+  }
+  return { ...KB_FALLBACK }
 }
 
 export function isDemo() {
@@ -66,11 +77,11 @@ export async function auditUpload(file, topic) {
   }
 }
 
-export async function auditSample() {
-  // 无后端时直接返回内置示例；有后端则用示例文本走真实审核
+export async function auditSample(text) {
+  // 无后端时直接返回内置示例；有后端则用给定文本走真实审核
   if (isDemo()) return demoResult()
   try {
-    return await auditText(DEMO.sampleText, 'emission_standards')
+    return await auditText(text || DEMO.sampleText, 'emission_standards')
   } catch (e) {
     return demoResult()
   }
