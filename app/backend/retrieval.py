@@ -28,10 +28,37 @@ SPARSE_WEIGHT = 0.4
 
 
 def _clean_snippet(text: str) -> str:
-    """清洗知识库片段：去除 HTML 标签/实体、LaTeX 命令、Markdown 标记等噪声，输出可读纯文本。"""
+    """清洗知识库片段：去除 HTML 标签/实体、孤立属性碎片、LaTeX 命令、Markdown 标记等噪声，输出可读纯文本。"""
     t = text or ""
-    t = re.sub(r"<[^>]+>", " ", t)
-    t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    # 实体解码（先做，避免 &lt;td&gt; 这类转义标签漏网）
+    t = t.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">")
+    t = t.replace("&amp;", "&").replace("&#60;", "<").replace("&#62;", ">")
+    # 去掉属性赋值（含引号值与裸值），覆盖 text 被截断后残留的孤立属性
+    t = re.sub(
+        r"\b(?:colspan|rowspan|width|height|align|valign|style|class|id|border"
+        r"|cellspacing|cellpadding|bgcolor|nowrap|scope|headers)\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)",
+        " ",
+        t,
+    )
+    # 去掉完整标签与孤立尖括号
+    t = re.sub(r"<[^>]*>", " ", t)
+    t = re.sub(r"(?<![<>=])>", " ", t)
+    t = t.replace("<", " ")
+    t = re.sub(r'(?<=[\w"])"', " ", t)
+    # 去掉 text 被截断后残留的孤立标签名/属性名（如 "td rowspan"）
+    t = re.sub(
+        r"\b(?:table|tbody|thead|tfoot|tr|td|th|span|div|font|html|body|colgroup|col)\b",
+        " ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(?:colspan|rowspan|cellspacing|cellpadding|valign|bgcolor|nowrap|width|height|align|border)\b",
+        " ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # LaTeX / 单位 / 标记
     t = t.replace("[表格已提取]", " ").replace("▓", " ")
     t = re.sub(r"\$+", " ", t)
     t = re.sub(r"\\[a-zA-Z]+", " ", t)
