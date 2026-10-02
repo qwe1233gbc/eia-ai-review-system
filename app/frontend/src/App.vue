@@ -10,6 +10,7 @@ const model = ref('')
 const kb = ref(null)
 
 const fileName = ref('')
+const selectedFile = ref(null)
 const dragging = ref(false)
 const loading = ref(false)
 const error = ref('')
@@ -27,6 +28,7 @@ const severityClass = (s) => ({ 高: 'high', 中: 'mid', 低: 'low' }[s] || 'mut
 
 function onFilePicked(file) {
   if (!file) return
+  selectedFile.value = file
   fileName.value = file.name
   activeSample.value = ''
   result.value = null
@@ -46,8 +48,7 @@ function onDrop(e) {
 }
 
 async function run() {
-  const input = document.querySelector('#file-input')
-  const f = input && input.files && input.files[0]
+  const f = selectedFile.value
   if (!f) {
     error.value = '请先选择或拖入一份报告文件，或点击下方「内置示例报告」'
     return
